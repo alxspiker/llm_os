@@ -6,7 +6,7 @@ if ! command -v lb >/dev/null 2>&1; then
   exit 1
 fi
 
-rm -rf .build binary binary.* cache chroot chroot.* config/binary config/bootstrap config/chroot config/common config/source local
+rm -rf .build binary binary.* chroot chroot.* config/binary config/bootstrap config/chroot config/common config/source local
 
 lb config \
   --mode debian \
@@ -16,7 +16,8 @@ lb config \
   --firmware-chroot false \
   --firmware-binary false \
   --binary-images iso-hybrid \
-  --debian-installer none \
+  --debian-installer false \
+  --initsystem systemd \
   --memtest none \
   --apt-recommends false \
   --bootappend-live "boot=live components username=live hostname=ai-live locales=en_US.UTF-8 keyboard-layouts=us"
