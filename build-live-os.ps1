@@ -10,6 +10,7 @@ Set-StrictMode -Version Latest
 
 $RootDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $LiveOsDir = Join-Path $RootDir "live os"
+$IsoDir = Join-Path $RootDir "iso"
 $BuildScript = Join-Path $LiveOsDir "build.sh"
 
 if (-not (Get-Command wsl.exe -ErrorAction SilentlyContinue)) {
@@ -52,7 +53,14 @@ if ($LASTEXITCODE -ne 0 -or -not $WslLiveOsDir) {
 
 $QuotedLiveOsDir = ConvertTo-BashSingleQuoted $WslLiveOsDir
 $QuotedBuildDir = ConvertTo-BashSingleQuoted $BuildDir
-$QuotedOutputIso = ConvertTo-BashSingleQuoted "$WslLiveOsDir/$IsoName"
+
+New-Item -ItemType Directory -Path $IsoDir -Force | Out-Null
+$WslIsoDir = (& wsl.exe -d $Distro -u root -- wslpath -a $IsoDir).Trim()
+if ($LASTEXITCODE -ne 0 -or -not $WslIsoDir) {
+  throw "Could not convert Windows path to WSL path: $IsoDir"
+}
+
+$QuotedOutputIso = ConvertTo-BashSingleQuoted "$WslIsoDir/$IsoName"
 
 if (-not $SkipApt) {
   Invoke-WslRoot "apt-get update"
@@ -94,7 +102,7 @@ try {
   Remove-Item -Path $TmpWinPath -ErrorAction SilentlyContinue
 }
 
-$OutputIso = Join-Path $LiveOsDir $IsoName
+$OutputIso = Join-Path $IsoDir $IsoName
 $OutputFile = Get-Item -LiteralPath $OutputIso
 
 Write-Host ""
