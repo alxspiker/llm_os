@@ -27,6 +27,12 @@ if [ -d /usr/share/live/build/bootloaders/isolinux ]; then
   rm -rf config/bootloaders/isolinux
   cp -a /usr/share/live/build/bootloaders/isolinux config/bootloaders/isolinux
 
+  for module in ldlinux.c32 libcom32.c32 libutil.c32; do
+    if [ -e "/usr/lib/syslinux/modules/bios/${module}" ]; then
+      cp -L "/usr/lib/syslinux/modules/bios/${module}" config/bootloaders/isolinux/
+    fi
+  done
+
   if [ ! -e config/bootloaders/isolinux/bootlogo ]; then
     tmpdir="$(mktemp -d)"
     (cd "$tmpdir" && find . | cpio --quiet -o -H newc) > config/bootloaders/isolinux/bootlogo
