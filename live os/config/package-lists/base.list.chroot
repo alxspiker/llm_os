@@ -12,6 +12,9 @@ network-manager
 dbus-x11
 xorg
 xinit
+xserver-xorg-input-libinput
+xserver-xorg-input-evdev
+xserver-xorg-input-synaptics
 openbox
 python3-gi
 gir1.2-gtk-3.0
