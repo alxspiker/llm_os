@@ -22,6 +22,8 @@ lb config \
   --apt-recommends false \
   --bootappend-live "boot=live components username=live hostname=ai-live locales=en_US.UTF-8 keyboard-layouts=us"
 
+export MKSQUASHFS_OPTIONS="${MKSQUASHFS_OPTIONS:-} -xattrs-exclude '^system\.posix_acl_'"
+
 if [ -d /usr/share/live/build/bootloaders/isolinux ]; then
   mkdir -p config/bootloaders
   rm -rf config/bootloaders/isolinux
