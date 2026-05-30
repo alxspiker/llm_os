@@ -86,8 +86,8 @@ sha256sum $QuotedOutputIso
 
 $TmpWinPath = Join-Path ([System.IO.Path]::GetTempPath()) "copy_iso_$(Get-Random).sh"
 $CopyIsoCommand | Set-Content -Path $TmpWinPath -Encoding ASCII
-$TmpWinPathEscaped = $TmpWinPath -replace "\\", "\\"
-$TmpWslPath = (& wsl.exe -d $Distro -u root -- wslpath -a $TmpWinPathEscaped).Trim()
+$TmpWinPathRegex = $TmpWinPath.Replace('\', '/')
+$TmpWslPath = (& wsl.exe -d $Distro -u root -- wslpath -a $TmpWinPathRegex).Trim()
 Invoke-WslRoot "bash '$TmpWslPath'"
 Remove-Item -Path $TmpWinPath -ErrorAction SilentlyContinue
 
