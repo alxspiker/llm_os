@@ -6,7 +6,7 @@ if ! command -v lb >/dev/null 2>&1; then
   exit 1
 fi
 
-rm -rf .build binary binary.* chroot chroot.* config/binary config/bootstrap config/chroot config/common config/source local
+rm -rf .build binary binary.* chroot chroot.* config/binary config/bootstrap config/chroot config/common config/source local cache
 
 lb config \
   --mode debian \
@@ -27,6 +27,10 @@ if [ -d /usr/share/live/build/bootloaders/isolinux ]; then
   rm -rf config/bootloaders/isolinux
   cp -a /usr/share/live/build/bootloaders/isolinux config/bootloaders/isolinux
 
+  # Bypass the syslinux boot menu
+  sed -i 's/^timeout .*/timeout 1/' config/bootloaders/isolinux/isolinux.cfg || true
+  sed -i 's/^default .*/default live/' config/bootloaders/isolinux/isolinux.cfg || true
+
   for module in ldlinux.c32 libcom32.c32 libutil.c32; do
     if [ -e "/usr/lib/syslinux/modules/bios/${module}" ]; then
       cp -L "/usr/lib/syslinux/modules/bios/${module}" config/bootloaders/isolinux/
@@ -38,6 +42,20 @@ if [ -d /usr/share/live/build/bootloaders/isolinux ]; then
     (cd "$tmpdir" && find . | cpio --quiet -o -H newc) > config/bootloaders/isolinux/bootlogo
     rm -rf "$tmpdir"
   fi
+fi
+
+if [ -d /usr/share/live/build/bootloaders/grub-efi ]; then
+  mkdir -p config/bootloaders
+  rm -rf config/bootloaders/grub-efi
+  cp -a /usr/share/live/build/bootloaders/grub-efi config/bootloaders/grub-efi
+  sed -i 's/set timeout=.*/set timeout=1/' config/bootloaders/grub-efi/grub.cfg || true
+fi
+
+if [ -d /usr/share/live/build/bootloaders/grub-pc ]; then
+  mkdir -p config/bootloaders
+  rm -rf config/bootloaders/grub-pc
+  cp -a /usr/share/live/build/bootloaders/grub-pc config/bootloaders/grub-pc
+  sed -i 's/set timeout=.*/set timeout=1/' config/bootloaders/grub-pc/grub.cfg || true
 fi
 
 lb build

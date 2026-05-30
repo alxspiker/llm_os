@@ -64,6 +64,7 @@ Invoke-WslRoot "rm -rf $QuotedBuildDir && mkdir -p $QuotedBuildDir && rsync -a -
 Invoke-WslRoot "cd $QuotedBuildDir && chmod +x build.sh && find config/hooks -type f -exec chmod +x {} + && ./build.sh"
 
 $CopyIsoCommand = @"
+set -e
 cd $QuotedBuildDir
 iso=""
 for candidate in binary.hybrid.iso binary.iso chroot/binary.hybrid.iso; do
@@ -83,7 +84,12 @@ cp -f "`$iso" $QuotedOutputIso
 sha256sum $QuotedOutputIso
 "@
 
-Invoke-WslRoot $CopyIsoCommand
+$TmpWinPath = Join-Path ([System.IO.Path]::GetTempPath()) "copy_iso_$(Get-Random).sh"
+$CopyIsoCommand | Set-Content -Path $TmpWinPath -Encoding ASCII
+$TmpWinPathEscaped = $TmpWinPath -replace "\\", "\\"
+$TmpWslPath = (& wsl.exe -d $Distro -u root -- wslpath -a $TmpWinPathEscaped).Trim()
+Invoke-WslRoot "bash '$TmpWslPath'"
+Remove-Item -Path $TmpWinPath -ErrorAction SilentlyContinue
 
 $OutputIso = Join-Path $LiveOsDir $IsoName
 $OutputFile = Get-Item -LiteralPath $OutputIso
