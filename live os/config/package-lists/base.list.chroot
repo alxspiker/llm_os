@@ -2,6 +2,8 @@ linux-image-amd64
 live-boot
 live-config
 systemd-sysv
+isolinux
+syslinux-common
 sudo
 openssh-server
 network-manager

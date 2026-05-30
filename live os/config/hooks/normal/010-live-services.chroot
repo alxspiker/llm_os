@@ -3,3 +3,7 @@ set -e
 
 systemctl enable NetworkManager
 systemctl disable ssh
+
+mkdir -p /usr/lib/syslinux
+ln -sf /usr/lib/ISOLINUX/isolinux.bin /usr/lib/syslinux/isolinux.bin
+ln -sf /usr/lib/syslinux/modules/bios/vesamenu.c32 /usr/lib/syslinux/vesamenu.c32
