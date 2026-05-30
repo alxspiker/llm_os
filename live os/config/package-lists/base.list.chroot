@@ -1,6 +1,7 @@
 linux-image-amd64
 live-boot
 live-config
+user-setup
 systemd-sysv
 isolinux
 syslinux-common
