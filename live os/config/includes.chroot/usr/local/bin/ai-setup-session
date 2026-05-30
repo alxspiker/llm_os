@@ -1,4 +1,6 @@
 #!/bin/sh
+exec >/tmp/ai-setup-session.log 2>&1
+
 openbox >/tmp/ai-setup-openbox.log 2>&1 &
 wm_pid="$!"
 

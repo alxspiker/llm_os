@@ -4,5 +4,5 @@ fi
 
 if [ "$(tty)" = "/dev/tty1" ] && [ -z "$DISPLAY" ] && [ ! -e /run/ai-setup-gui-closed ]; then
   touch /run/ai-setup-gui-closed
-  exec startx /usr/local/bin/ai-setup-session -- -nolisten tcp vt1
+  exec xinit /usr/local/bin/ai-setup-session -- /usr/bin/X -nolisten tcp vt1
 fi

@@ -6,8 +6,10 @@ systemctl disable ssh
 
 chmod 755 /etc/sudoers.d
 chmod 440 /etc/sudoers.d/live
+chmod 644 /etc/systemd/system/getty@tty1.service.d/autologin.conf
 chmod 755 /usr/local/bin/ai-setup-gui
 chmod 755 /usr/local/bin/ai-setup-session
+chmod 755 /etc/skel/.xinitrc
 
 mkdir -p /usr/lib/syslinux
 ln -sf /usr/lib/ISOLINUX/isolinux.bin /usr/lib/syslinux/isolinux.bin
