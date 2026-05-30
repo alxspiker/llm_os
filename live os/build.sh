@@ -12,6 +12,7 @@ lb config \
   --mode debian \
   --distribution trixie \
   --archive-areas "main contrib non-free non-free-firmware" \
+  --security false \
   --binary-images iso-hybrid \
   --debian-installer none \
   --memtest none \
