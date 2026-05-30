@@ -1,0 +1,9 @@
+#!/bin/sh
+openbox >/tmp/ai-setup-openbox.log 2>&1 &
+wm_pid="$!"
+
+/usr/local/bin/ai-setup-gui
+status="$?"
+
+kill "$wm_pid" >/dev/null 2>&1 || true
+exit "$status"
