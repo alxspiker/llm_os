@@ -29,7 +29,7 @@ if [ -d /usr/share/live/build/bootloaders/isolinux ]; then
 
   # Bypass the syslinux boot menu
   sed -i 's/^timeout .*/timeout 1/' config/bootloaders/isolinux/isolinux.cfg || true
-  sed -i 's/^default .*/default live/' config/bootloaders/isolinux/isolinux.cfg || true
+  sed -i 's/^default .*/default live-/' config/bootloaders/isolinux/isolinux.cfg || true
 
   for module in ldlinux.c32 libcom32.c32 libutil.c32; do
     if [ -e "/usr/lib/syslinux/modules/bios/${module}" ]; then
