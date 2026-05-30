@@ -35,6 +35,18 @@ function Invoke-WslRoot {
   }
 }
 
+function ConvertTo-WslPath {
+  param([Parameter(Mandatory = $true)][string]$WindowsPath)
+
+  $WslPathInput = $WindowsPath.Replace('\', '/')
+  $ConvertedPath = & wsl.exe -d $Distro -u root -- wslpath -a $WslPathInput
+  if ($LASTEXITCODE -ne 0 -or -not $ConvertedPath) {
+    throw "Could not convert Windows path to WSL path: $WindowsPath"
+  }
+
+  return $ConvertedPath.Trim()
+}
+
 $Distros = @(& wsl.exe --list --quiet | ForEach-Object {
   $_.Trim([char]0).Trim()
 } | Where-Object {
@@ -46,19 +58,13 @@ if ($Distros -notcontains $Distro) {
   throw "WSL distro '$Distro' was not found. Available distros: $Available"
 }
 
-$WslLiveOsDir = (& wsl.exe -d $Distro -u root -- wslpath -a $LiveOsDir).Trim()
-if ($LASTEXITCODE -ne 0 -or -not $WslLiveOsDir) {
-  throw "Could not convert Windows path to WSL path: $LiveOsDir"
-}
+$WslLiveOsDir = ConvertTo-WslPath $LiveOsDir
 
 $QuotedLiveOsDir = ConvertTo-BashSingleQuoted $WslLiveOsDir
 $QuotedBuildDir = ConvertTo-BashSingleQuoted $BuildDir
 
 New-Item -ItemType Directory -Path $IsoDir -Force | Out-Null
-$WslIsoDir = (& wsl.exe -d $Distro -u root -- wslpath -a $IsoDir).Trim()
-if ($LASTEXITCODE -ne 0 -or -not $WslIsoDir) {
-  throw "Could not convert Windows path to WSL path: $IsoDir"
-}
+$WslIsoDir = ConvertTo-WslPath $IsoDir
 
 $QuotedOutputIso = ConvertTo-BashSingleQuoted "$WslIsoDir/$IsoName"
 
