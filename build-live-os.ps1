@@ -56,7 +56,7 @@ $QuotedOutputIso = ConvertTo-BashSingleQuoted "$WslLiveOsDir/$IsoName"
 
 if (-not $SkipApt) {
   Invoke-WslRoot "apt-get update"
-  Invoke-WslRoot "DEBIAN_FRONTEND=noninteractive apt-get install -y live-build xorriso isolinux syslinux-common syslinux-utils squashfs-tools debootstrap cpio genisoimage rsync"
+  Invoke-WslRoot "DEBIAN_FRONTEND=noninteractive apt-get install -y live-build xorriso isolinux syslinux-common syslinux-utils squashfs-tools debootstrap debian-archive-keyring cpio genisoimage rsync zstd"
 }
 
 Invoke-WslRoot "rm -rf $QuotedBuildDir && mkdir -p $QuotedBuildDir && rsync -a --exclude '*.iso' $QuotedLiveOsDir/ $QuotedBuildDir/"
@@ -85,11 +85,14 @@ sha256sum $QuotedOutputIso
 "@
 
 $TmpWinPath = Join-Path ([System.IO.Path]::GetTempPath()) "copy_iso_$(Get-Random).sh"
-$CopyIsoCommand | Set-Content -Path $TmpWinPath -Encoding ASCII
+[System.IO.File]::WriteAllText($TmpWinPath, $CopyIsoCommand.Replace("`r`n", "`n"), [System.Text.Encoding]::ASCII)
 $TmpWinPathRegex = $TmpWinPath.Replace('\', '/')
 $TmpWslPath = (& wsl.exe -d $Distro -u root -- wslpath -a $TmpWinPathRegex).Trim()
-Invoke-WslRoot "bash '$TmpWslPath'"
-Remove-Item -Path $TmpWinPath -ErrorAction SilentlyContinue
+try {
+  Invoke-WslRoot "bash '$TmpWslPath'"
+} finally {
+  Remove-Item -Path $TmpWinPath -ErrorAction SilentlyContinue
+}
 
 $OutputIso = Join-Path $LiveOsDir $IsoName
 $OutputFile = Get-Item -LiteralPath $OutputIso

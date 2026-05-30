@@ -2,7 +2,7 @@
 set -euo pipefail
 
 if ! command -v lb >/dev/null 2>&1; then
-  echo "Missing live-build. Install: sudo apt install live-build xorriso isolinux syslinux-common syslinux-utils squashfs-tools"
+  echo "Missing live-build. Install: sudo apt install live-build xorriso isolinux syslinux-common syslinux-utils squashfs-tools debootstrap debian-archive-keyring cpio genisoimage rsync zstd"
   exit 1
 fi
 
@@ -42,6 +42,16 @@ if [ -d /usr/share/live/build/bootloaders/isolinux ]; then
     (cd "$tmpdir" && find . | cpio --quiet -o -H newc) > config/bootloaders/isolinux/bootlogo
     rm -rf "$tmpdir"
   fi
+
+  # live-build's syslinux helper copies these optional asset globs without
+  # checking for empty matches on some host versions.
+  touch \
+    config/bootloaders/isolinux/empty.fnt \
+    config/bootloaders/isolinux/empty.hlp \
+    config/bootloaders/isolinux/empty.jpg \
+    config/bootloaders/isolinux/empty.pcx \
+    config/bootloaders/isolinux/empty.tr \
+    config/bootloaders/isolinux/langlist
 fi
 
 if [ -d /usr/share/live/build/bootloaders/grub-efi ]; then
