@@ -4,6 +4,7 @@ live-config
 systemd-sysv
 isolinux
 syslinux-common
+syslinux-utils
 sudo
 openssh-server
 network-manager
