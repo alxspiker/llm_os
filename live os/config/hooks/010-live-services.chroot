@@ -7,4 +7,53 @@ systemctl disable ssh
 mkdir -p /usr/lib/syslinux
 ln -sf /usr/lib/ISOLINUX/isolinux.bin /usr/lib/syslinux/isolinux.bin
 ln -sf /usr/lib/syslinux/modules/bios/vesamenu.c32 /usr/lib/syslinux/vesamenu.c32
-ln -sf /usr/bin/rsvg-convert /usr/bin/rsvg
+
+cat >/usr/bin/rsvg <<'EOF'
+#!/bin/sh
+format=png
+height=
+width=
+input=
+output=
+
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --format)
+      shift
+      format="$1"
+      ;;
+    --format=*)
+      format="${1#*=}"
+      ;;
+    --height)
+      shift
+      height="$1"
+      ;;
+    --height=*)
+      height="${1#*=}"
+      ;;
+    --width)
+      shift
+      width="$1"
+      ;;
+    --width=*)
+      width="${1#*=}"
+      ;;
+    *)
+      if [ -z "$input" ]; then
+        input="$1"
+      else
+        output="$1"
+      fi
+      ;;
+  esac
+  shift
+done
+
+set -- rsvg-convert -f "$format"
+[ -n "$height" ] && set -- "$@" -h "$height"
+[ -n "$width" ] && set -- "$@" -w "$width"
+[ -n "$output" ] && set -- "$@" -o "$output"
+exec "$@" "$input"
+EOF
+chmod +x /usr/bin/rsvg
