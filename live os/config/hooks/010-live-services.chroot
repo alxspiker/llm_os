@@ -2,7 +2,9 @@
 set -e
 
 systemctl enable NetworkManager
-systemctl disable ssh
+rm -f /etc/ssh/ssh_host_*_key /etc/ssh/ssh_host_*_key.pub
+systemctl enable ssh
+python3 -m pip install --break-system-packages --no-cache-dir ngrok
 
 chmod 755 /etc/sudoers.d
 chmod 440 /etc/sudoers.d/live
