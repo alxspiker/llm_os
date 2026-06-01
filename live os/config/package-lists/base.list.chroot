@@ -3,10 +3,12 @@ live-boot
 live-config
 user-setup
 systemd-sysv
+libpam-systemd
 isolinux
 syslinux-common
 syslinux-utils
 sudo
+polkitd
 openssh-server
 network-manager
 dbus-x11
@@ -15,6 +17,9 @@ xinit
 xserver-xorg-input-libinput
 xserver-xorg-input-evdev
 xserver-xorg-input-synaptics
+libinput-tools
+xinput
+evtest
 openbox
 python3-gi
 gir1.2-gtk-3.0
@@ -34,6 +39,7 @@ wget
 git
 python3
 python3-venv
+python3-pip
 jq
 nano
 vim-tiny
