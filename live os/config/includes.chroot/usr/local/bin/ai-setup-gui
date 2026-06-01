@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+import configparser
 import json
 import os
 import re
@@ -10,6 +11,9 @@ import gi
 
 gi.require_version("Gtk", "3.0")
 from gi.repository import GLib, Gtk
+
+CONFIG_NAME = "AI-LIVE.CFG"
+NGROK_PORT = 80
 
 
 def run(command, timeout=12):
@@ -68,6 +72,34 @@ def redact_secret(text, secret=""):
     return redacted
 
 
+def mounted_roots():
+    roots = []
+    for base in ("/run/live/medium", "/media", "/mnt"):
+        if os.path.ismount(base):
+            roots.append(base)
+        elif os.path.isdir(base):
+            for current, dirs, _files in os.walk(base):
+                if os.path.ismount(current):
+                    roots.append(current)
+                    dirs[:] = []
+                elif current.count(os.sep) - base.count(os.sep) >= 2:
+                    dirs[:] = []
+    return list(dict.fromkeys(roots))
+
+
+def is_writable_dir(path):
+    if not os.path.isdir(path) or not os.access(path, os.W_OK):
+        return False
+    probe = os.path.join(path, ".ai-live-write-test")
+    try:
+        with open(probe, "w", encoding="utf-8") as handle:
+            handle.write("")
+        os.remove(probe)
+        return True
+    except OSError:
+        return False
+
+
 class SetupWindow(Gtk.Window):
     def __init__(self):
         super().__init__(title="AI Live Setup")
@@ -91,6 +123,12 @@ class SetupWindow(Gtk.Window):
         self.ngrok_settings_label = None
         self.ngrok_start_button = None
         self.ngrok_configure_button = None
+        self.ngrok_autostart = False
+        self.ngrok_autostart_attempted = False
+        self.config_path = None
+        self.config_status = "No USB config found."
+
+        self.load_config()
 
         self.build_network_screen()
         self.build_details_screen()
@@ -488,6 +526,7 @@ class SetupWindow(Gtk.Window):
         self.details_grid.show_all()
         self.update_ngrok_ui()
         self.stack.set_visible_child_name("details")
+        self.maybe_autostart_ngrok()
 
     def mcp_settings_text(self):
         endpoint = self.ngrok_url or "not-started"
@@ -514,6 +553,72 @@ class SetupWindow(Gtk.Window):
             self.ngrok_settings_label.set_text(self.mcp_settings_text())
         if self.ngrok_start_button:
             self.ngrok_start_button.set_label("Stop ngrok" if self.ngrok_listener else "Start ngrok")
+
+    def config_candidates(self):
+        for root in mounted_roots():
+            yield root, os.path.join(root, CONFIG_NAME)
+
+    def find_config_path(self, require_writable=False):
+        writable_fallback = None
+        for root, path in self.config_candidates():
+            if os.path.exists(path) and (not require_writable or os.access(path, os.W_OK)):
+                return path
+            if writable_fallback is None and is_writable_dir(root):
+                writable_fallback = path
+        if require_writable:
+            return writable_fallback
+        return None
+
+    def load_config(self):
+        path = self.find_config_path(require_writable=False)
+        if not path:
+            self.config_status = f"{CONFIG_NAME} not found on the boot USB."
+            return
+
+        parser = configparser.ConfigParser()
+        try:
+            parser.read(path)
+            self.config_path = path
+            self.ngrok_auth_token = parser.get("ngrok", "authtoken", fallback="").strip()
+            self.ngrok_autostart = parser.getboolean("ngrok", "autostart", fallback=False)
+            self.config_status = f"Loaded config from {path}"
+        except Exception as exc:
+            self.config_status = f"Could not read {CONFIG_NAME}: {exc}"
+
+    def save_config(self, token, autostart):
+        path = self.config_path if self.config_path and os.access(self.config_path, os.W_OK) else None
+        if not path:
+            path = self.find_config_path(require_writable=True)
+        if not path:
+            return None, f"No writable USB root found for {CONFIG_NAME}."
+
+        parser = configparser.ConfigParser()
+        parser["ngrok"] = {
+            "authtoken": token,
+            "autostart": "true" if autostart else "false",
+        }
+        try:
+            with open(path, "w", encoding="utf-8") as config_file:
+                parser.write(config_file)
+            try:
+                os.chmod(path, 0o600)
+            except OSError:
+                pass
+            self.config_path = path
+            self.config_status = f"Saved config to {path}"
+            return path, None
+        except Exception as exc:
+            return None, f"Could not save {CONFIG_NAME}: {exc}"
+
+    def maybe_autostart_ngrok(self):
+        if self.ngrok_autostart_attempted or self.ngrok_listener:
+            return
+        if not self.ngrok_autostart or not self.ngrok_auth_token:
+            return
+        if not is_online():
+            return
+        self.ngrok_autostart_attempted = True
+        self.start_ngrok(interactive=False, autostart=True)
 
     def load_ngrok(self):
         try:
@@ -543,7 +648,11 @@ class SetupWindow(Gtk.Window):
         token_entry.set_text(self.ngrok_auth_token)
         content.pack_start(token_entry, False, False, 0)
 
-        test_status = self.label("Test creates a temporary tunnel to localhost:80.", "muted")
+        autostart_check = Gtk.CheckButton(label="Autostart ngrok after network connects")
+        autostart_check.set_active(self.ngrok_autostart)
+        content.pack_start(autostart_check, False, False, 0)
+
+        test_status = self.label(f"Test creates a temporary tunnel to localhost:{NGROK_PORT}. {self.config_status}", "muted")
         content.pack_start(test_status, False, False, 0)
 
         test_button = Gtk.Button(label="Test connection")
@@ -554,7 +663,14 @@ class SetupWindow(Gtk.Window):
         response = dialog.run()
         if response == Gtk.ResponseType.OK:
             self.ngrok_auth_token = token_entry.get_text().strip()
-            self.update_ngrok_ui("Ngrok token saved for this live session.")
+            self.ngrok_autostart = autostart_check.get_active()
+            self.ngrok_autostart_attempted = False
+            _path, error = self.save_config(self.ngrok_auth_token, self.ngrok_autostart)
+            if error:
+                self.update_ngrok_ui(error)
+            else:
+                self.update_ngrok_ui(self.config_status)
+                self.maybe_autostart_ngrok()
         dialog.destroy()
 
     def test_ngrok_token(self, token, status_label, test_button):
@@ -572,7 +688,7 @@ class SetupWindow(Gtk.Window):
                 GLib.idle_add(self.finish_ngrok_test, status_label, test_button, f"ngrok package unavailable: {error}")
                 return
             try:
-                listener = ngrok.forward(80, authtoken=token)
+                listener = ngrok.forward(NGROK_PORT, authtoken=token)
                 url = listener.url()
                 ngrok.disconnect(url)
                 GLib.idle_add(self.finish_ngrok_test, status_label, test_button, f"Connection OK: {url}")
@@ -593,15 +709,19 @@ class SetupWindow(Gtk.Window):
         else:
             self.start_ngrok()
 
-    def start_ngrok(self):
+    def start_ngrok(self, interactive=True, autostart=False):
         if not self.ngrok_auth_token:
+            if not interactive:
+                self.update_ngrok_ui(f"Ngrok autostart skipped: no token in {CONFIG_NAME}.")
+                return
             self.open_ngrok_dialog()
             if not self.ngrok_auth_token:
                 self.update_ngrok_ui("Ngrok token is required before starting.")
                 return
 
         self.ngrok_start_button.set_sensitive(False)
-        self.update_ngrok_ui("Starting ngrok tunnel to localhost:80...")
+        action = "Autostarting" if autostart else "Starting"
+        self.update_ngrok_ui(f"{action} ngrok tunnel to localhost:{NGROK_PORT}...")
 
         def worker():
             ngrok, error = self.load_ngrok()
@@ -609,7 +729,7 @@ class SetupWindow(Gtk.Window):
                 GLib.idle_add(self.finish_ngrok_start, None, "", f"ngrok package unavailable: {error}")
                 return
             try:
-                listener = ngrok.forward(80, authtoken=self.ngrok_auth_token)
+                listener = ngrok.forward(NGROK_PORT, authtoken=self.ngrok_auth_token)
                 GLib.idle_add(self.finish_ngrok_start, listener, listener.url(), "Ngrok is running.")
             except Exception as exc:
                 error = redact_secret(exc, self.ngrok_auth_token)
