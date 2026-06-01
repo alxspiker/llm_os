@@ -3,6 +3,7 @@ set -e
 
 systemctl enable NetworkManager
 rm -f /etc/ssh/ssh_host_*_key /etc/ssh/ssh_host_*_key.pub
+systemctl enable ai-live-password.service
 systemctl enable ssh
 python3 -m pip install --break-system-packages --no-cache-dir ngrok
 
@@ -11,6 +12,7 @@ chmod 440 /etc/sudoers.d/live
 chmod 644 /etc/systemd/system/getty@tty1.service.d/autologin.conf
 chmod 755 /usr/local/bin/ai-setup-gui
 chmod 755 /usr/local/bin/ai-setup-session
+chmod 755 /usr/local/sbin/ai-generate-live-password
 chmod 755 /etc/skel/.xinitrc
 
 mkdir -p /usr/lib/syslinux

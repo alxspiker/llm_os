@@ -50,6 +50,15 @@ def local_ip_probe():
         return "Unavailable"
 
 
+def live_ssh_password():
+    try:
+        with open("/run/ai-live-password", "r", encoding="utf-8") as password_file:
+            password = password_file.read().strip()
+        return password or "Unavailable"
+    except OSError:
+        return "Unavailable"
+
+
 def redact_secret(text, secret=""):
     redacted = str(text)
     if secret:
@@ -460,6 +469,8 @@ class SetupWindow(Gtk.Window):
         return [
             ("Status", general.replace(":", " / ") if general else "Connected"),
             ("Hostname", hostname),
+            ("SSH User", "live"),
+            ("SSH Password", live_ssh_password()),
             ("Active Interface", active),
             ("Connection", connection),
             ("IPv4 Address", ipv4),
