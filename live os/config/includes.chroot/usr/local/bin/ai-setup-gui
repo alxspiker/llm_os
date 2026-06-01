@@ -125,6 +125,9 @@ class SetupWindow(Gtk.Window):
         self.ngrok_configure_button = None
         self.ngrok_autostart = False
         self.ngrok_autostart_attempted = False
+        self.wifi_ssid = ""
+        self.wifi_passkey = ""
+        self.wifi_autoconnect_attempted = False
         self.config_path = None
         self.config_status = "No USB config found."
 
@@ -391,12 +394,24 @@ class SetupWindow(Gtk.Window):
             if password:
                 command.extend(["password", password])
             code, out, err = run(command, timeout=30)
-            GLib.idle_add(self.after_connect, code, out, err)
+            GLib.idle_add(self.after_connect, code, out, err, ssid, password)
 
         threading.Thread(target=worker, daemon=True).start()
 
-    def after_connect(self, code, out, err):
+    def after_connect(self, code, out, err, ssid="", password=""):
         if code == 0 or is_online():
+            if ssid:
+                self.wifi_ssid = ssid
+                self.wifi_passkey = password
+                _path, error = self.save_config()
+                if error:
+                    self.status_label.set_text(f"Connected, but could not save Wi-Fi config: {error}")
+                    self.show_details()
+                    return False
+                else:
+                    self.status_label.set_text("Connected. Wi-Fi config saved.")
+                    self.show_details()
+                    return False
             self.status_label.set_text("Connected.")
             self.show_details()
         else:
@@ -408,6 +423,7 @@ class SetupWindow(Gtk.Window):
             self.show_details()
         else:
             self.stack.set_visible_child_name("network")
+            self.maybe_autoconnect_wifi()
 
     def poll_connection(self):
         if self.stack.get_visible_child_name() == "network" and is_online():
@@ -581,11 +597,13 @@ class SetupWindow(Gtk.Window):
             self.config_path = path
             self.ngrok_auth_token = parser.get("ngrok", "authtoken", fallback="").strip()
             self.ngrok_autostart = parser.getboolean("ngrok", "autostart", fallback=False)
+            self.wifi_ssid = parser.get("wifi", "ssid", fallback="").strip()
+            self.wifi_passkey = parser.get("wifi", "passkey", fallback="")
             self.config_status = f"Loaded config from {path}"
         except Exception as exc:
             self.config_status = f"Could not read {CONFIG_NAME}: {exc}"
 
-    def save_config(self, token, autostart):
+    def save_config(self, token=None, autostart=None):
         path = self.config_path if self.config_path and os.access(self.config_path, os.W_OK) else None
         if not path:
             path = self.find_config_path(require_writable=True)
@@ -594,8 +612,12 @@ class SetupWindow(Gtk.Window):
 
         parser = configparser.ConfigParser()
         parser["ngrok"] = {
-            "authtoken": token,
-            "autostart": "true" if autostart else "false",
+            "authtoken": self.ngrok_auth_token if token is None else token,
+            "autostart": "true" if (self.ngrok_autostart if autostart is None else autostart) else "false",
+        }
+        parser["wifi"] = {
+            "ssid": self.wifi_ssid,
+            "passkey": self.wifi_passkey,
         }
         try:
             with open(path, "w", encoding="utf-8") as config_file:
@@ -609,6 +631,30 @@ class SetupWindow(Gtk.Window):
             return path, None
         except Exception as exc:
             return None, f"Could not save {CONFIG_NAME}: {exc}"
+
+    def maybe_autoconnect_wifi(self):
+        if self.wifi_autoconnect_attempted or not self.wifi_ssid:
+            return
+        self.wifi_autoconnect_attempted = True
+        self.status_label.set_text(f"Connecting to saved Wi-Fi network {self.wifi_ssid}...")
+
+        def worker():
+            nmcli("radio", "wifi", "on", timeout=6)
+            command = ["nmcli", "device", "wifi", "connect", self.wifi_ssid]
+            if self.wifi_passkey:
+                command.extend(["password", self.wifi_passkey])
+            code, out, err = run(command, timeout=30)
+            GLib.idle_add(self.after_autoconnect_wifi, code, out, err)
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def after_autoconnect_wifi(self, code, out, err):
+        if code == 0 or is_online():
+            self.status_label.set_text("Connected to saved Wi-Fi network.")
+            self.show_details()
+        else:
+            self.status_label.set_text(err or out or "Could not connect to the saved Wi-Fi network.")
+        return False
 
     def maybe_autostart_ngrok(self):
         if self.ngrok_autostart_attempted or self.ngrok_listener:
