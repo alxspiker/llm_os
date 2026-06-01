@@ -35,6 +35,27 @@ def nmcli(*args, timeout=12):
     return run(["nmcli", *args], timeout=timeout)
 
 
+def split_nmcli_line(line):
+    parts = []
+    current = []
+    escaped = False
+    for char in line:
+        if escaped:
+            current.append(char)
+            escaped = False
+        elif char == "\\":
+            escaped = True
+        elif char == ":":
+            parts.append("".join(current))
+            current = []
+        else:
+            current.append(char)
+    if escaped:
+        current.append("\\")
+    parts.append("".join(current))
+    return parts
+
+
 def is_online():
     code, _, _ = run(["nm-online", "-q", "-t", "3"], timeout=5)
     if code == 0:
@@ -118,6 +139,30 @@ def sync_file(path):
     code, _out, _err = run(["sync", "-f", path], timeout=8)
     if code != 0:
         run(["sync"], timeout=8)
+
+
+def active_wifi_profile():
+    code, out, _ = nmcli("-t", "-f", "NAME,TYPE,DEVICE", "connection", "show", "--active", timeout=8)
+    if code != 0:
+        return "", ""
+    for line in out.splitlines():
+        parts = split_nmcli_line(line)
+        if len(parts) >= 3 and parts[1] == "802-11-wireless" and parts[2]:
+            return parts[0], parts[2]
+    return "", ""
+
+
+def active_wifi_credentials():
+    name, _device = active_wifi_profile()
+    if not name:
+        return "", ""
+    code, out, _ = run(["sudo", "-n", "nmcli", "--show-secrets", "-g", "802-11-wireless.ssid,802-11-wireless-security.psk", "connection", "show", name], timeout=8)
+    if code != 0:
+        return name, ""
+    values = out.splitlines()
+    ssid = values[0].strip() if values else name
+    passkey = values[1] if len(values) > 1 else ""
+    return ssid or name, passkey
 
 
 class SetupWindow(Gtk.Window):
@@ -477,7 +522,7 @@ class SetupWindow(Gtk.Window):
         seen = set()
         if code == 0:
             for line in out.splitlines():
-                parts = line.split(":")
+                parts = split_nmcli_line(line)
                 ssid = parts[0].replace("\\:", ":").strip()
                 if not ssid or ssid in seen:
                     continue
@@ -518,6 +563,9 @@ class SetupWindow(Gtk.Window):
         if self.status_spinner:
             self.status_spinner.stop()
         if code == 0 or is_online():
+            active_ssid, active_passkey = active_wifi_credentials()
+            ssid = ssid or active_ssid
+            password = password or active_passkey
             if ssid:
                 self.wifi_ssid = ssid
                 self.wifi_passkey = password
@@ -663,6 +711,7 @@ class SetupWindow(Gtk.Window):
         ]
 
     def show_details(self):
+        self.maybe_save_active_wifi_config()
         for child in self.details_grid.get_children():
             self.details_grid.remove(child)
         for row, (key, value) in enumerate(self.collect_details()):
@@ -679,6 +728,18 @@ class SetupWindow(Gtk.Window):
         self.update_ngrok_ui()
         self.stack.set_visible_child_name("details")
         self.maybe_autostart_ngrok()
+
+    def maybe_save_active_wifi_config(self):
+        if self.wifi_ssid and self.wifi_passkey:
+            return
+        ssid, passkey = active_wifi_credentials()
+        if not ssid or not passkey:
+            return
+        self.wifi_ssid = ssid
+        self.wifi_passkey = passkey
+        _path, error = self.save_config()
+        if error:
+            self.config_status = f"Connected, but could not save active Wi-Fi config: {error}"
 
     def mcp_settings_text(self):
         endpoint = self.ngrok_url or "not-started"
