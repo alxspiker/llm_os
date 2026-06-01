@@ -100,6 +100,26 @@ def is_writable_dir(path):
         return False
 
 
+def mount_options(path):
+    code, out, _ = run(["findmnt", "-no", "OPTIONS", "--target", path], timeout=5)
+    if code != 0:
+        return set()
+    return {option.strip() for option in out.split(",") if option.strip()}
+
+
+def remount(root, mode):
+    code, _out, err = run(["sudo", "-n", "mount", "-o", f"remount,{mode}", root], timeout=8)
+    if code != 0:
+        return err or f"mount remount,{mode} failed"
+    return None
+
+
+def sync_file(path):
+    code, _out, _err = run(["sync", "-f", path], timeout=8)
+    if code != 0:
+        run(["sync"], timeout=8)
+
+
 class SetupWindow(Gtk.Window):
     def __init__(self):
         super().__init__(title="AI Live Setup")
@@ -690,6 +710,21 @@ class SetupWindow(Gtk.Window):
         for root in mounted_roots():
             yield root, os.path.join(root, CONFIG_NAME)
 
+    def config_root_for_path(self, path):
+        for root, candidate in self.config_candidates():
+            if path == candidate:
+                return root
+        return None
+
+    def find_config_target(self):
+        fallback = None
+        for root, path in self.config_candidates():
+            if os.path.exists(path):
+                return root, path
+            if fallback is None:
+                fallback = (root, path)
+        return fallback
+
     def find_config_path(self, require_writable=False):
         writable_fallback = None
         for root, path in self.config_candidates():
@@ -720,11 +755,14 @@ class SetupWindow(Gtk.Window):
             self.config_status = f"Could not read {CONFIG_NAME}: {exc}"
 
     def save_config(self, token=None, autostart=None):
-        path = self.config_path if self.config_path and os.access(self.config_path, os.W_OK) else None
+        root = self.config_root_for_path(self.config_path) if self.config_path else None
+        path = self.config_path if root else None
         if not path:
-            path = self.find_config_path(require_writable=True)
-        if not path:
-            return None, f"No writable USB root found for {CONFIG_NAME}."
+            target = self.find_config_target()
+            if target:
+                root, path = target
+        if not root or not path:
+            return None, f"No USB root found for {CONFIG_NAME}."
 
         parser = configparser.ConfigParser()
         parser["ngrok"] = {
@@ -735,9 +773,21 @@ class SetupWindow(Gtk.Window):
             "ssid": self.wifi_ssid,
             "passkey": self.wifi_passkey,
         }
+        remounted_rw = False
         try:
+            if not is_writable_dir(root):
+                if "ro" not in mount_options(root):
+                    return None, f"No writable USB root found for {CONFIG_NAME}."
+                error = remount(root, "rw")
+                if error:
+                    return None, f"Could not remount USB read-write: {error}"
+                remounted_rw = True
+
             with open(path, "w", encoding="utf-8") as config_file:
                 parser.write(config_file)
+                config_file.flush()
+                os.fsync(config_file.fileno())
+            sync_file(path)
             try:
                 os.chmod(path, 0o600)
             except OSError:
@@ -747,6 +797,11 @@ class SetupWindow(Gtk.Window):
             return path, None
         except Exception as exc:
             return None, f"Could not save {CONFIG_NAME}: {exc}"
+        finally:
+            if remounted_rw:
+                error = remount(root, "ro")
+                if error:
+                    self.config_status = f"Saved config to {path}, but could not remount USB read-only: {error}"
 
     def maybe_autoconnect_wifi(self):
         if self.wifi_autoconnect_attempted or not self.wifi_ssid:
