@@ -3,6 +3,7 @@ set -e
 
 systemctl enable NetworkManager
 rm -f /etc/ssh/ssh_host_*_key /etc/ssh/ssh_host_*_key.pub
+chmod 644 /etc/systemd/system/ai-live-password.service
 systemctl enable ai-live-password.service
 systemctl enable ssh
 python3 -m pip install --break-system-packages --no-cache-dir ngrok
