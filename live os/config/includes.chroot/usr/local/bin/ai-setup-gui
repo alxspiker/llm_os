@@ -10,7 +10,7 @@ import threading
 import gi
 
 gi.require_version("Gtk", "3.0")
-from gi.repository import GLib, Gtk
+from gi.repository import GLib, Gtk, Pango
 
 CONFIG_NAME = "AI-LIVE.CFG"
 NGROK_PORT = 80
@@ -108,12 +108,13 @@ class SetupWindow(Gtk.Window):
         self.set_name("root")
         self.connect("destroy", Gtk.main_quit)
 
-        self.stack = Gtk.Stack(transition_type=Gtk.StackTransitionType.CROSSFADE, transition_duration=260)
+        self.stack = Gtk.Stack(transition_type=Gtk.StackTransitionType.CROSSFADE, transition_duration=380)
         self.add(self.stack)
 
         self.network_box = None
         self.password_entry = None
         self.status_label = None
+        self.status_spinner = None
         self.details_grid = None
         self.ngrok_auth_token = ""
         self.ngrok_listener = None
@@ -144,92 +145,144 @@ class SetupWindow(Gtk.Window):
     def apply_css(self):
         css = b"""
         #root {
-          background-color: #0f172a;
-          color: #e5e7eb;
+          background-color: #071512;
+          color: #e5f3f0;
           font-family: "DejaVu Sans";
         }
         .shell {
-          background-color: #0f766e;
+          background-image: linear-gradient(135deg, #062c2a 0%, #0b5d55 50%, #1c1f3a 100%);
         }
         .panel {
-          background: rgba(255, 255, 255, 0.94);
-          border-radius: 8px;
-          color: #111827;
+          background: rgba(248, 252, 251, 0.96);
+          border: 1px solid rgba(255, 255, 255, 0.78);
+          border-radius: 18px;
+          color: #10201d;
+          box-shadow: 0 24px 70px rgba(1, 19, 17, 0.32);
+        }
+        .topbar {
+          border-bottom: 1px solid #dbe7e4;
+          padding-bottom: 22px;
+        }
+        .status-pill {
+          background: #d9f7ef;
+          border: 1px solid #8bd9c8;
+          border-radius: 999px;
+          color: #075e54;
+          font-size: 12px;
+          font-weight: 800;
+          padding: 8px 12px;
+        }
+        .card {
+          background: #ffffff;
+          border: 1px solid #dbe7e4;
+          border-radius: 14px;
+          box-shadow: 0 10px 30px rgba(15, 52, 47, 0.08);
+        }
+        .soft-card {
+          background: #f4fbf9;
+          border: 1px solid #d5ece6;
+          border-radius: 14px;
         }
         .eyebrow {
-          color: #0f766e;
+          color: #0d766d;
           font-size: 12px;
-          font-weight: 700;
+          font-weight: 800;
         }
         .title {
-          color: #111827;
-          font-size: 34px;
+          color: #10201d;
+          font-size: 36px;
           font-weight: 800;
         }
         .subtitle {
-          color: #4b5563;
+          color: #58706b;
           font-size: 15px;
         }
         .section-title {
-          color: #111827;
+          color: #10201d;
           font-size: 16px;
-          font-weight: 700;
+          font-weight: 800;
         }
         .muted {
-          color: #6b7280;
+          color: #6b807c;
           font-size: 13px;
         }
-        button {
-          border-radius: 6px;
-          border: 1px solid #d1d5db;
-          background: #ffffff;
-          color: #111827;
-          padding: 10px 14px;
+        .status-text {
+          color: #44645e;
+          font-size: 13px;
           font-weight: 700;
         }
+        button {
+          border-radius: 10px;
+          border: 1px solid #ccd9d6;
+          background: #ffffff;
+          color: #10201d;
+          padding: 11px 16px;
+          font-weight: 800;
+          box-shadow: 0 4px 14px rgba(15, 52, 47, 0.08);
+        }
         button:hover {
-          background: #f3f4f6;
+          background: #f3faf8;
         }
         button.suggested-action {
-          background: #0f766e;
-          border-color: #0f766e;
+          background: #0d766d;
+          border-color: #0d766d;
           color: #ffffff;
         }
         button.suggested-action:hover {
-          background: #115e59;
+          background: #075e54;
+        }
+        button.secondary-action {
+          background: #eef7f5;
+          border-color: #cce5df;
+          color: #21443e;
         }
         entry {
-          border-radius: 6px;
-          border: 1px solid #d1d5db;
-          padding: 10px 12px;
-          color: #111827;
+          border-radius: 10px;
+          border: 1px solid #cbdad6;
+          padding: 12px 14px;
+          color: #10201d;
           background: #ffffff;
         }
+        scrolledwindow {
+          border-radius: 12px;
+        }
         row {
-          border-bottom: 1px solid #e5e7eb;
-          min-height: 54px;
+          border-bottom: 1px solid #edf3f1;
+          min-height: 60px;
+        }
+        row:hover {
+          background: #f3faf8;
         }
         row:selected {
-          background: #ccfbf1;
-          color: #111827;
+          background: #d9f7ef;
+          color: #10201d;
+        }
+        .signal-pill {
+          background: #edf7f5;
+          border-radius: 999px;
+          color: #315c55;
+          font-size: 12px;
+          font-weight: 800;
+          padding: 6px 10px;
         }
         .detail-key {
-          color: #64748b;
+          color: #68817c;
           font-size: 13px;
-          font-weight: 700;
+          font-weight: 800;
         }
         .detail-value {
-          color: #111827;
+          color: #10201d;
           font-size: 17px;
-          font-weight: 700;
+          font-weight: 800;
         }
         .code {
-          background: #f8fafc;
-          border-radius: 6px;
-          color: #111827;
+          background: #f4f8f7;
+          border: 1px solid #dce9e6;
+          border-radius: 12px;
+          color: #10201d;
           font-family: "DejaVu Sans Mono";
           font-size: 12px;
-          padding: 10px;
+          padding: 12px;
         }
         """
         provider = Gtk.CssProvider()
@@ -249,7 +302,7 @@ class SetupWindow(Gtk.Window):
         panel = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
         panel.set_halign(Gtk.Align.CENTER)
         panel.set_valign(Gtk.Align.CENTER)
-        panel.set_size_request(860, -1)
+        panel.set_size_request(980, -1)
         panel.set_margin_top(48)
         panel.set_margin_bottom(48)
         panel.set_margin_start(32)
@@ -257,10 +310,10 @@ class SetupWindow(Gtk.Window):
         panel.get_style_context().add_class("panel")
 
         content = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
-        content.set_margin_top(34)
-        content.set_margin_bottom(34)
-        content.set_margin_start(34)
-        content.set_margin_end(34)
+        content.set_margin_top(36)
+        content.set_margin_bottom(36)
+        content.set_margin_start(36)
+        content.set_margin_end(36)
         panel.pack_start(content, True, True, 0)
 
         shell.pack_start(panel, True, True, 0)
@@ -272,30 +325,52 @@ class SetupWindow(Gtk.Window):
         item.get_style_context().add_class(css_class)
         return item
 
+    def framed_box(self, css_class, spacing=14):
+        frame = Gtk.EventBox()
+        frame.get_style_context().add_class(css_class)
+        inner = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=spacing)
+        inner.set_margin_top(18)
+        inner.set_margin_bottom(18)
+        inner.set_margin_start(18)
+        inner.set_margin_end(18)
+        frame.add(inner)
+        return frame, inner
+
     def build_network_screen(self):
         shell, panel = self.outer()
-        panel.pack_start(self.label("NETWORK SETUP", "eyebrow"), False, False, 0)
-        panel.pack_start(self.label("Connect this computer", "title"), False, False, 8)
-        panel.pack_start(
+        topbar = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=20)
+        topbar.get_style_context().add_class("topbar")
+        panel.pack_start(topbar, False, False, 0)
+
+        heading = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
+        topbar.pack_start(heading, True, True, 0)
+        heading.pack_start(self.label("NETWORK SETUP", "eyebrow"), False, False, 0)
+        heading.pack_start(self.label("Connect this computer", "title"), False, False, 0)
+        heading.pack_start(
             self.label(
-                "Choose a Wi-Fi network, or plug in Ethernet. Setup will continue automatically once the computer is online.",
+                "Choose Wi-Fi or plug in Ethernet. Saved Wi-Fi details reconnect automatically on the next boot.",
                 "subtitle",
             ),
             False,
             False,
             0,
         )
+        pill = self.label("AUTO-DETECTING", "status-pill")
+        pill.set_halign(Gtk.Align.END)
+        pill.set_valign(Gtk.Align.START)
+        topbar.pack_start(pill, False, False, 0)
 
-        content = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=24)
-        content.set_margin_top(28)
+        content = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=18)
+        content.set_margin_top(24)
         panel.pack_start(content, True, True, 0)
 
-        left = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
-        content.pack_start(left, True, True, 0)
+        left_frame, left = self.framed_box("card", spacing=14)
+        content.pack_start(left_frame, True, True, 0)
         left.pack_start(self.label("Available Wi-Fi", "section-title"), False, False, 0)
+        left.pack_start(self.label("Select a network below. Ethernet connections continue automatically.", "muted"), False, False, 0)
 
         scroller = Gtk.ScrolledWindow()
-        scroller.set_min_content_height(280)
+        scroller.set_min_content_height(300)
         scroller.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
         self.network_box = Gtk.ListBox()
         self.network_box.set_selection_mode(Gtk.SelectionMode.SINGLE)
@@ -305,13 +380,19 @@ class SetupWindow(Gtk.Window):
         actions = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
         left.pack_start(actions, False, False, 0)
         refresh = Gtk.Button(label="Refresh")
+        refresh.get_style_context().add_class("secondary-action")
         refresh.connect("clicked", lambda _button: self.refresh_networks())
         actions.pack_start(refresh, False, False, 0)
 
-        right = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
-        right.set_size_request(300, -1)
-        content.pack_start(right, False, False, 0)
-        right.pack_start(self.label("Password", "section-title"), False, False, 0)
+        right_frame, right = self.framed_box("soft-card", spacing=14)
+        right_frame.set_size_request(310, -1)
+        content.pack_start(right_frame, False, False, 0)
+        right.pack_start(self.label("Network password", "section-title"), False, False, 0)
+        if self.wifi_ssid:
+            saved = self.label(f"Saved network: {self.wifi_ssid}", "muted")
+        else:
+            saved = self.label("Saved network details will be written to AI-LIVE.CFG on the USB.", "muted")
+        right.pack_start(saved, False, False, 0)
         self.password_entry = Gtk.Entry()
         self.password_entry.set_visibility(False)
         self.password_entry.set_placeholder_text("Wi-Fi password")
@@ -324,12 +405,17 @@ class SetupWindow(Gtk.Window):
         right.pack_start(connect, False, False, 0)
 
         skip = Gtk.Button(label="Continue")
+        skip.get_style_context().add_class("secondary-action")
         skip.connect("clicked", lambda _button: self.show_details())
         right.pack_start(skip, False, False, 0)
 
-        self.status_label = self.label("Waiting for a network connection...", "muted")
-        self.status_label.set_margin_top(8)
-        right.pack_start(self.status_label, False, False, 0)
+        status_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
+        status_box.set_margin_top(8)
+        self.status_spinner = Gtk.Spinner()
+        status_box.pack_start(self.status_spinner, False, False, 0)
+        self.status_label = self.label("Waiting for a network connection...", "status-text")
+        status_box.pack_start(self.status_label, True, True, 0)
+        right.pack_start(status_box, False, False, 0)
 
         self.stack.add_named(shell, "network")
 
@@ -337,18 +423,24 @@ class SetupWindow(Gtk.Window):
         row = Gtk.ListBoxRow()
         row.ssid = ssid
         box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
-        box.set_border_width(10)
+        box.set_border_width(12)
         row.add(box)
 
         text = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
         box.pack_start(text, True, True, 0)
         name = self.label(ssid or "Hidden network", "section-title")
         text.pack_start(name, False, False, 0)
-        meta = self.label(f"Signal {signal or 'unknown'}%  {security or 'Open network'}", "muted")
+        meta = self.label(security or "Open network", "muted")
         text.pack_start(meta, False, False, 0)
+        signal_label = self.label(f"{signal or '?'}%", "signal-pill")
+        signal_label.set_halign(Gtk.Align.END)
+        signal_label.set_valign(Gtk.Align.CENTER)
+        box.pack_start(signal_label, False, False, 0)
         return row
 
     def refresh_networks(self):
+        if self.status_spinner:
+            self.status_spinner.start()
         self.status_label.set_text("Scanning for Wi-Fi networks...")
         for child in self.network_box.get_children():
             self.network_box.remove(child)
@@ -377,6 +469,8 @@ class SetupWindow(Gtk.Window):
             self.status_label.set_text("Select a network and enter its password.")
         else:
             self.status_label.set_text(err or "No Wi-Fi networks found. Ethernet is also supported.")
+        if self.status_spinner:
+            self.status_spinner.stop()
         self.network_box.show_all()
         return False
 
@@ -387,6 +481,8 @@ class SetupWindow(Gtk.Window):
             return
         ssid = row.ssid
         password = self.password_entry.get_text()
+        if self.status_spinner:
+            self.status_spinner.start()
         self.status_label.set_text(f"Connecting to {ssid}...")
 
         def worker():
@@ -399,6 +495,8 @@ class SetupWindow(Gtk.Window):
         threading.Thread(target=worker, daemon=True).start()
 
     def after_connect(self, code, out, err, ssid="", password=""):
+        if self.status_spinner:
+            self.status_spinner.stop()
         if code == 0 or is_online():
             if ssid:
                 self.wifi_ssid = ssid
@@ -432,23 +530,33 @@ class SetupWindow(Gtk.Window):
 
     def build_details_screen(self):
         shell, panel = self.outer()
-        panel.pack_start(self.label("CONNECTED", "eyebrow"), False, False, 0)
-        panel.pack_start(self.label("Computer network details", "title"), False, False, 8)
-        panel.pack_start(
-            self.label("This computer is online. Use these details to reach it from another device on the network.", "subtitle"),
+        topbar = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=20)
+        topbar.get_style_context().add_class("topbar")
+        panel.pack_start(topbar, False, False, 0)
+
+        heading = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
+        topbar.pack_start(heading, True, True, 0)
+        heading.pack_start(self.label("CONNECTED", "eyebrow"), False, False, 0)
+        heading.pack_start(self.label("Computer network details", "title"), False, False, 0)
+        heading.pack_start(
+            self.label("Use these details to reach this live computer from another device on the network.", "subtitle"),
             False,
             False,
             0,
         )
+        pill = self.label("ONLINE", "status-pill")
+        pill.set_halign(Gtk.Align.END)
+        pill.set_valign(Gtk.Align.START)
+        topbar.pack_start(pill, False, False, 0)
 
-        main = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=28)
-        main.set_margin_top(26)
+        main = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=18)
+        main.set_margin_top(24)
         panel.pack_start(main, False, False, 0)
 
-        left = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
-        main.pack_start(left, False, False, 0)
+        left_frame, left = self.framed_box("card", spacing=0)
+        main.pack_start(left_frame, True, True, 0)
 
-        self.details_grid = Gtk.Grid(column_spacing=24, row_spacing=16)
+        self.details_grid = Gtk.Grid(column_spacing=18, row_spacing=16)
         left.pack_start(self.details_grid, False, False, 0)
 
         buttons = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
@@ -456,16 +564,18 @@ class SetupWindow(Gtk.Window):
         left.pack_start(buttons, False, False, 0)
 
         refresh = Gtk.Button(label="Refresh")
+        refresh.get_style_context().add_class("secondary-action")
         refresh.connect("clicked", lambda _button: self.show_details())
         buttons.pack_start(refresh, False, False, 0)
 
         close = Gtk.Button(label="Close")
+        close.get_style_context().add_class("secondary-action")
         close.connect("clicked", lambda _button: Gtk.main_quit())
         buttons.pack_start(close, False, False, 0)
 
-        ngrok_section = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
-        ngrok_section.set_size_request(360, -1)
-        main.pack_start(ngrok_section, False, False, 0)
+        ngrok_frame, ngrok_section = self.framed_box("soft-card", spacing=10)
+        ngrok_frame.set_size_request(350, -1)
+        main.pack_start(ngrok_frame, False, False, 0)
         ngrok_section.pack_start(self.label("Model context protocol server settings", "section-title"), False, False, 0)
 
         self.ngrok_status_label = self.label("Ngrok is stopped.", "muted")
@@ -481,6 +591,7 @@ class SetupWindow(Gtk.Window):
         ngrok_section.pack_start(ngrok_buttons, False, False, 0)
 
         self.ngrok_configure_button = Gtk.Button(label="Ngrok token")
+        self.ngrok_configure_button.get_style_context().add_class("secondary-action")
         self.ngrok_configure_button.connect("clicked", lambda _button: self.open_ngrok_dialog())
         ngrok_buttons.pack_start(self.ngrok_configure_button, False, False, 0)
 
@@ -537,6 +648,11 @@ class SetupWindow(Gtk.Window):
         for row, (key, value) in enumerate(self.collect_details()):
             key_label = self.label(key.upper(), "detail-key")
             value_label = self.label(value, "detail-value")
+            value_label.set_line_wrap(True)
+            value_label.set_line_wrap_mode(Pango.WrapMode.CHAR)
+            value_label.set_max_width_chars(22)
+            value_label.set_size_request(260, -1)
+            value_label.set_selectable(True)
             self.details_grid.attach(key_label, 0, row, 1, 1)
             self.details_grid.attach(value_label, 1, row, 1, 1)
         self.details_grid.show_all()
@@ -636,6 +752,8 @@ class SetupWindow(Gtk.Window):
         if self.wifi_autoconnect_attempted or not self.wifi_ssid:
             return
         self.wifi_autoconnect_attempted = True
+        if self.status_spinner:
+            self.status_spinner.start()
         self.status_label.set_text(f"Connecting to saved Wi-Fi network {self.wifi_ssid}...")
 
         def worker():
@@ -649,6 +767,8 @@ class SetupWindow(Gtk.Window):
         threading.Thread(target=worker, daemon=True).start()
 
     def after_autoconnect_wifi(self, code, out, err):
+        if self.status_spinner:
+            self.status_spinner.stop()
         if code == 0 or is_online():
             self.status_label.set_text("Connected to saved Wi-Fi network.")
             self.show_details()
